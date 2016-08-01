@@ -19,10 +19,7 @@ type AuthorizeImplicitGrantTypeHandler struct {
 	AccessTokenStrategy core.AccessTokenStrategy
 
 	// ImplicitGrantStorage is used to persist session data across requests.
-	AccessTokenStorage core.AccessTokenStorage
-
-	// AccessTokenLifespan defines the lifetime of an access token.
-	AccessTokenLifespan time.Duration
+	AccessTokenStorage  core.AccessTokenStorage
 }
 
 func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, req *http.Request, ar AuthorizeRequester, resp AuthorizeResponder) error {
@@ -51,8 +48,9 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 		return errors.Wrap(ErrServerError, err.Error())
 	}
 
+	session := ar.GetSession().(Lifespan)
+	resp.AddFragment("expires_in", strconv.Itoa(int(session.GetLifespan(ctx, ar, "access_token") / time.Second)))
 	resp.AddFragment("access_token", token)
-	resp.AddFragment("expires_in", strconv.Itoa(int(c.AccessTokenLifespan/time.Second)))
 	resp.AddFragment("token_type", "bearer")
 	resp.AddFragment("state", ar.GetState())
 	resp.AddFragment("scope", strings.Join(ar.GetGrantedScopes(), "+"))

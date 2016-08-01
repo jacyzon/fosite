@@ -33,6 +33,7 @@ import (
 	"github.com/pkg/errors"
 	goauth "golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
+	"golang.org/x/net/context"
 )
 
 // This is an exemplary storage instance. We will add a client and a user to it so we can use these later on.
@@ -111,7 +112,7 @@ var idtokenStrategy = &oidcstrategy.DefaultStrategy{
 }
 
 // Change below to change the signing method (hmacStrategy or jwtStrategy)
-var selectedStrategy = hmacStrategy
+var selectedStrategy = jwtStrategy
 
 // A session is passed from the `/auth` to the `/token` endpoint. You probably want to store data like: "Who made the request",
 // "What organization does that person belong to" and so on.
@@ -121,6 +122,21 @@ type session struct {
 	User string
 	*strategy.JWTSession
 	*oidcstrategy.DefaultSession
+}
+
+func (s *session) GetLifespan(_ context.Context, _ Requester, tokenType string) time.Duration {
+	switch tokenType {
+	case "access_token":
+		// 60 day
+		return 60 * 24 * time.Hour
+	case "refresh_token":
+		// 6 months
+		return 6 * 30 * 24 * time.Hour
+	case "authorization_token":
+		return 10 * time.Minute
+	default:
+		return time.Hour
+	}
 }
 
 type stackTracer interface {
@@ -136,7 +152,6 @@ func newSession(user string) *session {
 				Issuer:    "https://fosite.my-application.com",
 				Subject:   user,
 				Audience:  "https://my-client.my-application.com",
-				ExpiresAt: time.Now().Add(time.Hour * 6),
 				IssuedAt:  time.Now(),
 			},
 			JWTHeader: &jwt.Headers{
@@ -148,7 +163,6 @@ func newSession(user string) *session {
 				Issuer:    "https://fosite.my-application.com",
 				Subject:   user,
 				Audience:  "https://my-client.my-application.com",
-				ExpiresAt: time.Now().Add(time.Hour * 6),
 				IssuedAt:  time.Now(),
 			},
 			Headers: &jwt.Headers{
@@ -180,8 +194,6 @@ func fositeFactory() OAuth2Provider {
 		RefreshTokenStrategy:      selectedStrategy,
 		AuthorizeCodeStrategy:     selectedStrategy,
 		AuthorizeCodeGrantStorage: store,
-		AuthCodeLifespan:          time.Minute * 10,
-		AccessTokenLifespan:       accessTokenLifespan,
 	}
 	// In order to "activate" the handler, we need to add it to fosite
 	f.AuthorizeEndpointHandlers.Append(explicitHandler)
@@ -195,7 +207,6 @@ func fositeFactory() OAuth2Provider {
 	implicitHandler := &implicit.AuthorizeImplicitGrantTypeHandler{
 		AccessTokenStrategy: selectedStrategy,
 		AccessTokenStorage:  store,
-		AccessTokenLifespan: accessTokenLifespan,
 	}
 	f.AuthorizeEndpointHandlers.Append(implicitHandler)
 
@@ -255,7 +266,7 @@ func fositeFactory() OAuth2Provider {
 
 	// Add a request validator for Access Tokens to fosite
 	f.AuthorizedRequestValidators.Append(&core.CoreValidator{
-		AccessTokenStrategy: hmacStrategy,
+		AccessTokenStrategy: jwtStrategy,
 		AccessTokenStorage:  store,
 	})
 
@@ -444,9 +455,9 @@ func homeHandler(rw http.ResponseWriter, req *http.Request) {
 				<a href="%s">Make an invalid request</a>
 			</li>
 		</ul>`,
-		clientConf.AuthCodeURL("some-random-state-foobar")+"&nonce=some-random-nonce",
+		clientConf.AuthCodeURL("some-random-state-foobar") + "&nonce=some-random-nonce",
 		"http://localhost:3846/auth?client_id=my-client&redirect_uri=http%3A%2F%2Flocalhost%3A3846%2Fcallback&response_type=token%20id_token&scope=fosite%20openid&state=some-random-state-foobar&nonce=some-random-nonce",
-		clientConf.AuthCodeURL("some-random-state-foobar")+"&nonce=some-random-nonce",
+		clientConf.AuthCodeURL("some-random-state-foobar") + "&nonce=some-random-nonce",
 		"/auth?client_id=my-client&scope=fosite&response_type=123&redirect_uri=http://localhost:3846/callback",
 	)))
 }
@@ -516,7 +527,7 @@ func callbackHandler(rw http.ResponseWriter, req *http.Request) {
 		</ul>`,
 		"/protected-api?token=" + token.AccessToken,
 		token.AccessToken,
-		"?refresh="+url.QueryEscape(token.RefreshToken),
+		"?refresh=" + url.QueryEscape(token.RefreshToken),
 		token.RefreshToken,
 		token,
 	)))

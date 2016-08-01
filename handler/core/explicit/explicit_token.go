@@ -101,9 +101,10 @@ func (c *AuthorizeExplicitGrantTypeHandler) PopulateTokenEndpointResponse(ctx co
 		return errors.Wrap(fosite.ErrServerError, err.Error())
 	}
 
+	session := requester.GetSession().(fosite.Lifespan)
+	responder.SetExpiresIn(session.GetLifespan(ctx, requester, "access_token") / time.Second)
 	responder.SetAccessToken(access)
 	responder.SetTokenType("bearer")
-	responder.SetExpiresIn(c.AccessTokenLifespan / time.Second)
 	responder.SetScopes(requester.GetGrantedScopes())
 	if refresh != "" {
 		responder.SetExtra("refresh_token", refresh)
