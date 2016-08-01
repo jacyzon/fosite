@@ -17,9 +17,11 @@ import (
 // as defined in https://tools.ietf.org/html/rfc6749#section-4.2
 type AuthorizeImplicitGrantTypeHandler struct {
 	AccessTokenStrategy AccessTokenStrategy
+	RefreshTokenStrategy     RefreshTokenStrategy
 
 	// ImplicitGrantStorage is used to persist session data across requests.
 	AccessTokenStorage AccessTokenStorage
+	RefreshTokenGrantStorage RefreshTokenGrantStorage
 
 	// AccessTokenLifespan defines the lifetime of an access token.
 	AccessTokenLifespan time.Duration
@@ -59,15 +61,30 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 	token, signature, err := c.AccessTokenStrategy.GenerateAccessToken(ctx, ar)
 	if err != nil {
 		return errors.Wrap(fosite.ErrServerError, err.Error())
-	} else if err := c.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, ar); err != nil {
+	}
+
+	var refreshToken, refreshSignature string
+	if ar.GetGrantedScopes().Has("offline") {
+		refreshToken, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, ar)
+		if err != nil {
+			return errors.Wrap(fosite.ErrServerError, err.Error())
+		}
+		if err := c.RefreshTokenGrantStorage.CreateRefreshTokenSession(ctx, refreshSignature, ar); err != nil {
+			return errors.Wrap(fosite.ErrServerError, err.Error())
+		}
+	}
+	if err := c.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, ar); err != nil {
 		return errors.Wrap(fosite.ErrServerError, err.Error())
 	}
 
 	resp.AddFragment("access_token", token)
-	resp.AddFragment("expires_in", strconv.Itoa(int(c.AccessTokenLifespan/time.Second)))
+	resp.AddFragment("expires_in", strconv.Itoa(int(c.AccessTokenLifespan / time.Second)))
 	resp.AddFragment("token_type", "bearer")
 	resp.AddFragment("state", ar.GetState())
 	resp.AddFragment("scope", strings.Join(ar.GetGrantedScopes(), "+"))
+	if refreshToken != "" {
+		resp.AddFragment("refresh_token", refreshToken)
+	}
 	ar.SetResponseTypeHandled("token")
 
 	return nil
