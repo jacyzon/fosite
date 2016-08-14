@@ -7,6 +7,7 @@ import (
 	"github.com/ory-am/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+	"time"
 )
 
 // RS256JWTStrategy is a JWT RS256 strategy.
@@ -36,7 +37,7 @@ func (h RS256JWTStrategy) AuthorizeCodeSignature(token string) string {
 }
 
 func (h *RS256JWTStrategy) GenerateAccessToken(_ context.Context, requester fosite.Requester) (token string, signature string, err error) {
-	return h.generate(requester)
+	return h.generate(requester, "access_token")
 }
 
 func (h *RS256JWTStrategy) ValidateAccessToken(_ context.Context, _ fosite.Requester, token string) error {
@@ -44,7 +45,7 @@ func (h *RS256JWTStrategy) ValidateAccessToken(_ context.Context, _ fosite.Reque
 }
 
 func (h *RS256JWTStrategy) GenerateRefreshToken(_ context.Context, requester fosite.Requester) (token string, signature string, err error) {
-	return h.generate(requester)
+	return h.generate(requester, "refresh_token")
 }
 
 func (h *RS256JWTStrategy) ValidateRefreshToken(_ context.Context, _ fosite.Requester, token string) error {
@@ -52,7 +53,7 @@ func (h *RS256JWTStrategy) ValidateRefreshToken(_ context.Context, _ fosite.Requ
 }
 
 func (h *RS256JWTStrategy) GenerateAuthorizeCode(_ context.Context, requester fosite.Requester) (token string, signature string, err error) {
-	return h.generate(requester)
+	return h.generate(requester, "authorization_code")
 }
 
 func (h *RS256JWTStrategy) ValidateAuthorizeCode(_ context.Context, requester fosite.Requester, token string) error {
@@ -73,12 +74,29 @@ func (h *RS256JWTStrategy) validate(token string) error {
 	return nil
 }
 
-func (h *RS256JWTStrategy) generate(requester fosite.Requester) (string, string, error) {
+func (h *RS256JWTStrategy) generate(requester fosite.Requester, tokenType string) (string, string, error) {
 	if jwtSession, ok := requester.GetSession().(JWTSessionContainer); !ok {
 		return "", "", errors.New("Session must be of type JWTSessionContainer")
-	} else if jwtSession.GetJWTClaims() == nil {
-		return "", "", errors.New("GetTokenClaims() must not be nil")
 	} else {
-		return h.RS256JWTStrategy.Generate(jwtSession.GetJWTClaims(), jwtSession.GetJWTHeader())
+		claims := jwtSession.GetJWTClaims()
+		if claims == nil {
+			return "", "", errors.New("GetTokenClaims() must not be nil")
+		} else {
+			if session, ok := requester.GetSession().(Lifespan); !ok {
+				return "", "", errors.New("Session must be of type Lifespan")
+			} else {
+				var duration time.Duration
+				switch tokenType {
+				case "access_token":
+					duration = session.GetAccessTokenLifespan()
+				case "refresh_token":
+					duration = session.GetRefreshTokenLifespan()
+				case "authorization_code":
+					duration = session.GetAuthorizeCodeLifespan()
+				}
+				claims.ExpiresAt = time.Now().Add(duration)
+				return h.RS256JWTStrategy.Generate(jwtSession.GetJWTClaims(), jwtSession.GetJWTHeader())
+			}
+		}
 	}
 }

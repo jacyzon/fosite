@@ -29,7 +29,7 @@ var config = new(compose.Config)
 // variable.
 var strat = compose.CommonStrategy{
 	// alternatively you could use OAuth2Strategy: compose.NewOAuth2JWTStrategy(mustRSAKey())
-	CoreStrategy: compose.NewOAuth2HMACStrategy(config, []byte("some-super-cool-secret-that-nobody-knows")),
+	CoreStrategy: compose.NewOAuth2JWTStrategy(mustRSAKey()),
 
 	// open id connect strategy
 	OpenIDConnectTokenStrategy: compose.NewOpenIDConnectStrategy(mustRSAKey()),
@@ -78,7 +78,8 @@ var appClientConf = clientcredentials.Config{
 // For our use case, the session will meet the requirements imposed by JWT access tokens, HMAC access tokens and OpenID Connect
 // ID Tokens plus a custom field
 type session struct {
-	User string
+	User   string
+	*compose.Config
 	*core.HMACSession
 	*core.JWTSession
 	*openid.DefaultSession
@@ -272,6 +273,7 @@ type stackTracer interface {
 func newSession(user string) *session {
 	return &session{
 		User: user,
+		Config: config,
 		HMACSession: &core.HMACSession{
 			AccessTokenExpiry: time.Now().Add(time.Minute * 30),
 		},
@@ -281,7 +283,6 @@ func newSession(user string) *session {
 				Issuer:    "https://fosite.my-application.com",
 				Subject:   user,
 				Audience:  "https://my-client.my-application.com",
-				ExpiresAt: time.Now().Add(time.Hour * 6),
 				IssuedAt:  time.Now(),
 			},
 			JWTHeader: &jwt.Headers{
@@ -293,7 +294,6 @@ func newSession(user string) *session {
 				Issuer:    "https://fosite.my-application.com",
 				Subject:   user,
 				Audience:  "https://my-client.my-application.com",
-				ExpiresAt: time.Now().Add(time.Hour * 6),
 				IssuedAt:  time.Now(),
 			},
 			Headers: &jwt.Headers{

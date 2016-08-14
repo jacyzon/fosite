@@ -16,17 +16,20 @@ import (
 // AuthorizeImplicitGrantTypeHandler is a response handler for the Authorize Code grant using the implicit grant type
 // as defined in https://tools.ietf.org/html/rfc6749#section-4.2
 type AuthorizeImplicitGrantTypeHandler struct {
-	AccessTokenStrategy AccessTokenStrategy
+	AccessTokenStrategy      AccessTokenStrategy
 	RefreshTokenStrategy     RefreshTokenStrategy
 
 	// ImplicitGrantStorage is used to persist session data across requests.
-	AccessTokenStorage AccessTokenStorage
+	AccessTokenStorage       AccessTokenStorage
 	RefreshTokenGrantStorage RefreshTokenGrantStorage
 
 	// AccessTokenLifespan defines the lifetime of an access token.
-	AccessTokenLifespan time.Duration
+	AccessTokenLifespan      time.Duration
 
-	ScopeStrategy fosite.ScopeStrategy
+	// RefreshTokenLifespan defines the lifetime of an refresh token.
+	RefreshTokenLifespan     time.Duration
+
+	ScopeStrategy            fosite.ScopeStrategy
 }
 
 func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, req *http.Request, ar fosite.AuthorizeRequester, resp fosite.AuthorizeResponder) error {

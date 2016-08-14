@@ -81,10 +81,13 @@ func OAuth2AuthorizeImplicitFactory(config *Config, storage interface{}, strateg
 		*oauth2.CoreValidator
 	}{
 		AuthorizeImplicitGrantTypeHandler: &oauth2.AuthorizeImplicitGrantTypeHandler{
-			AccessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
-			AccessTokenStorage:  storage.(oauth2.AccessTokenStorage),
-			AccessTokenLifespan: config.GetAccessTokenLifespan(),
-			ScopeStrategy:       fosite.HierarchicScopeStrategy,
+			AccessTokenStrategy:      strategy.(oauth2.AccessTokenStrategy),
+			AccessTokenStorage:       storage.(oauth2.AccessTokenStorage),
+			AccessTokenLifespan:      config.GetAccessTokenLifespan(),
+			RefreshTokenStrategy:     strategy.(oauth2.RefreshTokenStrategy),
+			RefreshTokenGrantStorage: storage.(oauth2.RefreshTokenGrantStorage),
+			RefreshTokenLifespan:     config.GetRefreshTokenLifespan(),
+			ScopeStrategy:            fosite.HierarchicScopeStrategy,
 		},
 		CoreValidator: &oauth2.CoreValidator{
 			CoreStrategy:  strategy.(oauth2.CoreStrategy),
