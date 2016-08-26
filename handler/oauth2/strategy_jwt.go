@@ -82,7 +82,7 @@ func (h *RS256JWTStrategy) generate(requester fosite.Requester, tokenType string
 		if claims == nil {
 			return "", "", errors.New("GetTokenClaims() must not be nil")
 		} else {
-			if session, ok := requester.GetSession().(Lifespan); !ok {
+			if session, ok := requester.GetSession().(fosite.Lifespan); !ok {
 				return "", "", errors.New("Session must be of type Lifespan")
 			} else {
 				var duration time.Duration
